@@ -1,10 +1,12 @@
 package com.octodev.relay;
 
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -13,22 +15,25 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 public class MainActivity extends AppCompatActivity {
-    private static final int BACKGROUND = Color.BLACK;
-    private static final int SURFACE = Color.rgb(38, 38, 41);
-    private static final int TEXT = Color.WHITE;
-    private static final int SECONDARY_TEXT = Color.rgb(160, 160, 165);
-
     private TorrentAdapter torrentAdapter;
     private EditText searchBar;
     private RecyclerView tableView;
+
+    public static APIKeyStorage apiKeyStorage;
+    public static TorboxAPIClient apiClient;
+    private TorrentItem clickedTorrent;
+    private final java.util.List<TorrentItem> allTorrents = new java.util.ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        getWindow().setStatusBarColor(BACKGROUND);
-        getWindow().setNavigationBarColor(BACKGROUND);
+        getWindow().setStatusBarColor(ApplicationStyle.BACKGROUND);
+        getWindow().setNavigationBarColor(ApplicationStyle.BACKGROUND);
         getWindow().getDecorView().setSystemUiVisibility(0);
+
+        apiKeyStorage = new APIKeyStorage(this);
+        apiClient = new TorboxAPIClient();
 
         setupUI();
     }
@@ -36,14 +41,18 @@ public class MainActivity extends AppCompatActivity {
     private void setupUI() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(BACKGROUND);
+        root.setBackgroundColor(ApplicationStyle.BACKGROUND);
 
         setupToolbar(root);
         setupSearchBar(root);
         setupTableView(root);
-        loadFakeTorrents();
+//        loadFakeTorrents();
+        loadTorrents();
 
         setContentView(root);
+
+        root.setFocusableInTouchMode(true);
+        root.requestFocus();
     }
 
     private void setupToolbar(LinearLayout root) {
@@ -51,52 +60,73 @@ public class MainActivity extends AppCompatActivity {
         toolbar.setOrientation(LinearLayout.HORIZONTAL);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
         toolbar.setPadding(dp(4), 0, dp(4), 0);
-        toolbar.setBackgroundColor(BACKGROUND);
+        toolbar.setBackgroundColor(ApplicationStyle.BACKGROUND);
 
-        LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(dp(44), dp(44));
+        LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(dp(48), dp(48));
 
-        TextView settingsButton = new TextView(this);
-        settingsButton.setText("⚙");
-        settingsButton.setTextColor(TEXT);
-        settingsButton.setTextSize(20);
-        settingsButton.setGravity(Gravity.CENTER);
+        // Settings button
+        ImageButton settingsButton = new ImageButton(this);
+        settingsButton.setImageResource(R.drawable.ic_settings);
+        settingsButton.setColorFilter(ApplicationStyle.TEXT);
+        settingsButton.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+        settingsButton.setContentDescription("Settings");
+
         toolbar.addView(settingsButton, buttonParams);
 
+        settingsButton.setOnClickListener(v -> promptForApiKey());
+
+        // Title
         TextView title = new TextView(this);
         title.setText("Torrents");
-        title.setTextColor(TEXT);
+        title.setTextColor(ApplicationStyle.TEXT);
         title.setTextSize(18);
         title.setGravity(Gravity.CENTER);
 
-        toolbar.addView(title, new LinearLayout.LayoutParams(0, dp(44), 1));
+        toolbar.addView(title, new LinearLayout.LayoutParams(0, dp(48), 1));
 
-        TextView addButton = new TextView(this);
-        addButton.setText("+");
-        addButton.setTextColor(TEXT);
-        addButton.setTextSize(26);
-        addButton.setGravity(Gravity.CENTER);
+        // Add button
+        ImageButton addButton = new ImageButton(this);
+        addButton.setImageResource(R.drawable.ic_add);
+        addButton.setColorFilter(ApplicationStyle.TEXT);
+        addButton.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+        addButton.setContentDescription("Add torrent");
+
         toolbar.addView(addButton, buttonParams);
-
-        root.addView(toolbar, new LinearLayout.LayoutParams(-1, dp(44)));
+        root.addView(toolbar, new LinearLayout.LayoutParams(-1, dp(48)));
     }
+
+
     private void setupSearchBar(LinearLayout root) {
         searchBar = new EditText(this);
         searchBar.setHint("Search torrents");
-        searchBar.setHintTextColor(SECONDARY_TEXT);
-        searchBar.setTextColor(TEXT);
+        searchBar.setHintTextColor(ApplicationStyle.SECONDARY_TEXT);
+        searchBar.setTextColor(ApplicationStyle.TEXT);
         searchBar.setTextSize(16);
         searchBar.setSingleLine(true);
         searchBar.setPadding(dp(16), 0, dp(16), 0);
 
         GradientDrawable background = new GradientDrawable();
-        background.setColor(SURFACE);
+        background.setColor(ApplicationStyle.SURFACE);
         background.setCornerRadius(dp(10));
         searchBar.setBackground(background);
 
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, dp(48));
         params.setMargins(dp(8), dp(8), dp(8), dp(8));
-
         root.addView(searchBar, params);
+
+        searchBar.addTextChangedListener(new android.text.TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                filterTorrents(s.toString());
+            }
+
+            @Override
+            public void afterTextChanged(android.text.Editable s) {}
+        });
     }
 
     private void setupTableView(LinearLayout root) {
@@ -104,9 +134,128 @@ public class MainActivity extends AppCompatActivity {
         tableView.setLayoutManager(new LinearLayoutManager(this));
 
         torrentAdapter = new TorrentAdapter();
+        torrentAdapter.setOnTorrentClickListener(torrent -> {
+            Intent intent = new Intent(this, TorrentDetailViewActivity.class);
+            intent.putExtra("torrent", torrent);
+            startActivity(intent);
+        });
+
         tableView.setAdapter(torrentAdapter);
 
         root.addView(tableView, new LinearLayout.LayoutParams(-1, 0, 1));
+    }
+
+    private void filterTorrents(String query) {
+        String search = query.trim().toLowerCase(java.util.Locale.ROOT);
+
+        if (search.isEmpty()) {
+            torrentAdapter.setTorrents(new java.util.ArrayList<>(allTorrents));
+            return;
+        }
+
+        java.util.List<TorrentItem> filtered = new java.util.ArrayList<>();
+
+        for (TorrentItem torrent : allTorrents) {
+            if (contains(torrent.name, search)  || contains(torrent.hash, search)  || contains(torrent.magnet, search) || contains(torrent.downloadState, search)) {
+                filtered.add(torrent);
+            }
+        }
+
+        torrentAdapter.setTorrents(filtered);
+    }
+
+    private boolean contains(String value, String search) {
+        return value != null && value.toLowerCase(java.util.Locale.ROOT).contains(search);
+    }
+
+    private void loadTorrents() {
+        String apiKey;
+
+        try {
+            apiKey = apiKeyStorage.load();
+        } catch (Exception e) {
+            e.printStackTrace();
+            android.widget.Toast.makeText(this, "Unable to read API key.", android.widget.Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            promptForApiKey();
+            return;
+        }
+
+        apiClient.getMyList(
+            apiKey,
+            new TorboxAPIClient.MyListCallback() {
+                @Override
+                public void onSuccess(TorboxAPIClient.MyListResponse response) {
+                    runOnUiThread(() -> {
+                        allTorrents.clear();
+
+                        if (response.data != null) {
+                            allTorrents.addAll(response.data);
+                        }
+
+                        filterTorrents(searchBar.getText().toString());
+                    });
+                }
+
+                @Override
+                public void onError(Exception error) {
+                    runOnUiThread(() -> {
+                        android.widget.Toast.makeText(MainActivity.this, "Unable to load torrents: " + error.getMessage(), android.widget.Toast.LENGTH_LONG).show();
+                    });
+                }
+            }
+        );
+    }
+
+    private void saveApiKey(String apiKey) {
+        try {
+            apiKeyStorage.save(apiKey);
+            loadTorrents();
+        } catch (Exception e) {
+            e.printStackTrace();
+            android.widget.Toast.makeText(this, "Unable to save API key.", android.widget.Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void promptForApiKey() {
+        EditText input = new EditText(this);
+
+        input.setHint("API key");
+        input.setSingleLine(true);
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+
+        int padding = dp(24);
+
+        LinearLayout container = new LinearLayout(this);
+        container.setPadding(padding, 0, padding, 0);
+        container.addView(
+            input,
+            new LinearLayout.LayoutParams(
+                -1,
+                dp(50)
+            )
+        );
+
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("API Key Required")
+            .setMessage("Please enter your TorBox API key.")
+            .setView(container)
+            .setCancelable(false)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save", (dialog, which) -> {
+                String key = input.getText()
+                        .toString()
+                        .trim();
+
+                if (!key.isEmpty()) {
+                    saveApiKey(input.getText().toString().trim());
+                    loadTorrents();
+                }
+            })
+            .show();
     }
 
     private void loadFakeTorrents() {
@@ -188,7 +337,19 @@ public class MainActivity extends AppCompatActivity {
         torrent6.allowZipped = false;
         torrent6.files = new java.util.ArrayList<>();
 
-        torrentAdapter.setTorrents(java.util.Arrays.asList(torrent1, torrent2, torrent3, torrent4, torrent5, torrent6));
+        allTorrents.clear();
+        allTorrents.addAll(
+            java.util.Arrays.asList(
+                torrent1,
+                torrent2,
+                torrent3,
+                torrent4,
+                torrent5,
+                torrent6
+            )
+        );
+
+        torrentAdapter.setTorrents(allTorrents);
     }
 
     private int dp(float value) {

@@ -15,11 +15,6 @@ import android.widget.TextView;
 import androidx.recyclerview.widget.RecyclerView;
 
 public class TorrentTableViewCell extends RecyclerView.ViewHolder {
-    private static final int BACKGROUND = Color.BLACK;
-    private static final int TEXT = Color.WHITE;
-    private static final int SECONDARY_TEXT = Color.rgb(160, 160, 165);
-    private static final int BLUE = Color.rgb(70, 140, 255);
-    private static final int GREEN = Color.rgb(50, 210, 100);
 
     private final TextView nameLabel;
     private final TextView statusLabel;
@@ -32,13 +27,13 @@ public class TorrentTableViewCell extends RecyclerView.ViewHolder {
     public TorrentTableViewCell(Context context) {
         super(createRoot(context));
 
-        LinearLayout root = (LinearLayout) itemView;
+        LinearLayout root = (LinearLayout)itemView;
 
         FrameLayout nameRow = new FrameLayout(context);
         root.addView(nameRow, new LinearLayout.LayoutParams(-1, dp(context, 24)));
 
         nameLabel = new TextView(context);
-        nameLabel.setTextColor(TEXT);
+        nameLabel.setTextColor(ApplicationStyle.TEXT);
         nameLabel.setTextSize(16);
         nameLabel.setMaxLines(1);
         nameLabel.setEllipsize(TextUtils.TruncateAt.END);
@@ -48,11 +43,10 @@ public class TorrentTableViewCell extends RecyclerView.ViewHolder {
         nameRow.addView(nameLabel, nameParams);
 
         progressLabel = new TextView(context);
-        progressLabel.setTextColor(TEXT);
+        progressLabel.setTextColor(ApplicationStyle.TEXT);
         progressLabel.setTextSize(13);
         progressLabel.setTypeface(Typeface.MONOSPACE);
         progressLabel.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
-
         nameRow.addView(progressLabel, new FrameLayout.LayoutParams(dp(context, 70), -1, Gravity.RIGHT));
 
         statusLabel = new TextView(context);
@@ -70,26 +64,25 @@ public class TorrentTableViewCell extends RecyclerView.ViewHolder {
         root.addView(bottomRow, new LinearLayout.LayoutParams(-1, dp(context, 22)));
 
         sizeLabel = new TextView(context);
-        sizeLabel.setTextColor(SECONDARY_TEXT);
+        sizeLabel.setTextColor(ApplicationStyle.SECONDARY_TEXT);
         sizeLabel.setTextSize(11);
         sizeLabel.setTypeface(Typeface.MONOSPACE);
+        sizeLabel.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         sizeLabel.setSingleLine(true);
         bottomRow.addView(sizeLabel, new LinearLayout.LayoutParams(-2, -1));
 
         metadataLabel = new TextView(context);
-        metadataLabel.setTextColor(SECONDARY_TEXT);
+        metadataLabel.setTextColor(ApplicationStyle.SECONDARY_TEXT);
         metadataLabel.setTextSize(11);
-        metadataLabel.setGravity(Gravity.CENTER_VERTICAL);
         metadataLabel.setSingleLine(true);
         metadataLabel.setEllipsize(TextUtils.TruncateAt.END);
-
+        metadataLabel.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams metadataParams = new LinearLayout.LayoutParams(0, -1, 1);
         metadataParams.leftMargin = dp(context, 8);
-        metadataParams.rightMargin = dp(context, 8);
         bottomRow.addView(metadataLabel, metadataParams);
 
         speedLabel = new TextView(context);
-        speedLabel.setTextColor(SECONDARY_TEXT);
+        speedLabel.setTextColor(ApplicationStyle.SECONDARY_TEXT);
         speedLabel.setTextSize(11);
         speedLabel.setTypeface(Typeface.MONOSPACE);
         speedLabel.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
@@ -110,39 +103,35 @@ public class TorrentTableViewCell extends RecyclerView.ViewHolder {
 
         if (Boolean.TRUE.equals(torrent.downloadFinished)) {
             statusLabel.setText("Completed");
-            statusLabel.setTextColor(GREEN);
-            setProgressColor(GREEN);
+            statusLabel.setTextColor(ApplicationStyle.GREEN);
+            setProgressColor(ApplicationStyle.GREEN);
             speedLabel.setText("");
         } else if (!Boolean.TRUE.equals(torrent.active)) {
             statusLabel.setText(!state.isEmpty() ? state : "Paused");
-            statusLabel.setTextColor(SECONDARY_TEXT);
-            setProgressColor(SECONDARY_TEXT);
+            statusLabel.setTextColor(ApplicationStyle.SECONDARY_TEXT);
+            setProgressColor(ApplicationStyle.SECONDARY_TEXT);
             speedLabel.setText("");
         } else {
             statusLabel.setText(!state.isEmpty() ? state : "Downloading");
-            statusLabel.setTextColor(BLUE);
-            setProgressColor(BLUE);
+            statusLabel.setTextColor(ApplicationStyle.BLUE);
+            setProgressColor(ApplicationStyle.BLUE);
 
             long speed = torrent.downloadSpeed != null ? torrent.downloadSpeed : 0;
-            speedLabel.setText(speed > 0 ? "↓ " + formatSpeed(speed) : "");
+            speedLabel.setText(speed > 0 ? "↓ " + Utils.formatSpeed(speed) : "");
         }
 
         long size = torrent.size != null ? torrent.size : 0;
-        sizeLabel.setText(formatSize(size));
+        sizeLabel.setText(Utils.formatSize(size));
 
         StringBuilder metadata = new StringBuilder();
-
         if (torrent.files != null && !torrent.files.isEmpty())
             metadata.append(torrent.files.size()).append(" files");
-
         if (Boolean.TRUE.equals(torrent.cached))
-            appendMetadata(metadata, "Cached");
-
+            Utils.appendMetadata(metadata, "Cached");
         if (Boolean.TRUE.equals(torrent.downloadPresent))
-            appendMetadata(metadata, "Downloaded");
-
+            Utils.appendMetadata(metadata, "Downloaded");
         if (Boolean.TRUE.equals(torrent.allowZipped))
-            appendMetadata(metadata, "ZIP ALLOWED");
+            Utils.appendMetadata(metadata, "ZIP ALLOWED");
 
         metadataLabel.setText(metadata.toString());
     }
@@ -165,47 +154,11 @@ public class TorrentTableViewCell extends RecyclerView.ViewHolder {
         progressView.setProgressDrawable(drawable);
     }
 
-    private static void appendMetadata(StringBuilder builder, String value) {
-        if (builder.length() > 0)
-            builder.append(" • ");
-        builder.append(value);
-    }
-
-    private static String formatSpeed(long speed) {
-        double value = speed;
-
-        if (value >= 1024.0 * 1024.0 * 1024.0)
-            return String.format("%.1f GB/s", value / (1024.0 * 1024.0 * 1024.0));
-
-        if (value >= 1024.0 * 1024.0)
-            return String.format("%.1f MB/s", value / (1024.0 * 1024.0));
-
-        if (value >= 1024.0)
-            return String.format("%.1f KB/s", value / 1024.0);
-
-        return String.format("%.0f B/s", value);
-    }
-
-    private static String formatSize(long size) {
-        double value = size;
-
-        if (value >= 1024.0 * 1024.0 * 1024.0)
-            return String.format("%.2f GB", value / (1024.0 * 1024.0 * 1024.0));
-
-        if (value >= 1024.0 * 1024.0)
-            return String.format("%.1f MB", value / (1024.0 * 1024.0));
-
-        if (value >= 1024.0)
-            return String.format("%.1f KB", value / 1024.0);
-
-        return size + " B";
-    }
-
     private static LinearLayout createRoot(Context context) {
         LinearLayout root = new LinearLayout(context);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(context, 16), dp(context, 8), dp(context, 16), dp(context, 8));
-        root.setBackgroundColor(BACKGROUND);
+        root.setBackgroundColor(ApplicationStyle.BACKGROUND);
         return root;
     }
 
