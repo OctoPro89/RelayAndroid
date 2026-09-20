@@ -47,7 +47,7 @@ public class TorrentFileTableViewCell extends RecyclerView.ViewHolder {
 
         TextView requestDl = new TextView(context);
         requestDl.setTextColor(ApplicationStyle.BLUE);
-        requestDl.setTextSize(12);
+        requestDl.setTextSize(13);
         requestDl.setText("Request DL");
         requestDl.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
 

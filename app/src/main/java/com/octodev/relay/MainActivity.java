@@ -38,6 +38,15 @@ public class MainActivity extends AppCompatActivity {
         setupUI();
     }
 
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == 1001 && resultCode == RESULT_OK) {
+            loadTorrents();
+        }
+    }
+
     private void setupUI() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -91,10 +100,14 @@ public class MainActivity extends AppCompatActivity {
         addButton.setBackgroundColor(android.graphics.Color.TRANSPARENT);
         addButton.setContentDescription("Add torrent");
 
+        addButton.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, TorrentCreateActivity.class);
+            startActivityForResult(intent, 1001);
+        });
+
         toolbar.addView(addButton, buttonParams);
         root.addView(toolbar, new LinearLayout.LayoutParams(-1, dp(48)));
     }
-
 
     private void setupSearchBar(LinearLayout root) {
         searchBar = new EditText(this);
@@ -240,7 +253,7 @@ public class MainActivity extends AppCompatActivity {
         );
 
         new androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("API Key Required")
+            .setTitle("Change API Key")
             .setMessage("Please enter your TorBox API key.")
             .setView(container)
             .setCancelable(false)
@@ -251,8 +264,7 @@ public class MainActivity extends AppCompatActivity {
                         .trim();
 
                 if (!key.isEmpty()) {
-                    saveApiKey(input.getText().toString().trim());
-                    loadTorrents();
+                    saveApiKey(input.getText().toString().trim()); // loads the torrents as well
                 }
             })
             .show();

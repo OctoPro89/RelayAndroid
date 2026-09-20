@@ -12,6 +12,9 @@ import okhttp3.Callback;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.RequestBody;
 
 public class TorboxAPIClient {
     private static final String BASE_URL = "https://api.torbox.app";
@@ -84,85 +87,20 @@ public class TorboxAPIClient {
         });
     }
 
-    public void requestDownloadLink(
-            String apiKey, int torrentId, int fileId, DownloadLinkCallback callback) {
-
+    public void requestDownloadLink(String apiKey, int torrentId, int fileId, DownloadLinkCallback callback) {
         String url = BASE_URL + "/v1/api/torrents/requestdl"
-                + "?token=" + apiKey
-                + "&torrent_id=" + torrentId
-                + "&file_id=" + fileId
-                + "&zip_link=false"
-                + "&torrent_file=false"
-                + "&user_ip="
-                + "&redirect=false";
+            + "?token=" + apiKey
+            + "&torrent_id=" + torrentId
+            + "&file_id=" + fileId
+            + "&zip_link=false"
+            + "&torrent_file=false"
+            + "&user_ip="
+            + "&redirect=false";
 
         Request request = new Request.Builder()
-                .url(url)
-                .get()
-                .build();
-
-        client.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                callback.onError(e);
-            }
-
-            @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) {
-                try (Response res = response) {
-                    if (!res.isSuccessful()) {
-                        callback.onError(new IOException(
-                                "HTTP " + res.code() + ": " + res.message()));
-                        return;
-                    }
-
-                    if (res.body() == null) {
-                        callback.onError(new IOException("Empty response"));
-                        return;
-                    }
-
-                    DownloadLinkResponse result =
-                            gson.fromJson(res.body().string(), DownloadLinkResponse.class);
-
-                    if (result == null) {
-                        callback.onError(new IOException("Invalid response"));
-                        return;
-                    }
-
-                    if (Boolean.FALSE.equals(result.success)) {
-                        String message = result.detail;
-
-                        if (message == null || message.isEmpty()) {
-                            message = result.error;
-                        }
-
-                        callback.onError(new IOException(
-                                message != null ? message : "TorBox request failed"));
-                        return;
-                    }
-
-                    callback.onSuccess(result);
-                } catch (Exception e) {
-                    callback.onError(e);
-                }
-            }
-        });
-    }
-
-    public void requestTorrentDownloadLink(
-            String apiKey, int torrentId, boolean zippedLink, DownloadLinkCallback callback) {
-
-        String url = BASE_URL + "/v1/api/torrents/requestdl"
-                + "?token=" + apiKey
-                + "&torrent_id=" + torrentId
-                + "&zip_link=" + (zippedLink ? "true" : "false")
-                + "&user_ip="
-                + "&redirect=false";
-
-        Request request = new Request.Builder()
-                .url(url)
-                .get()
-                .build();
+            .url(url)
+            .get()
+            .build();
 
         client.newCall(request).enqueue(new Callback() {
             @Override
@@ -209,6 +147,136 @@ public class TorboxAPIClient {
         });
     }
 
+    public void requestTorrentDownloadLink(String apiKey, int torrentId, boolean zippedLink, DownloadLinkCallback callback) {
+
+        String url = BASE_URL + "/v1/api/torrents/requestdl"
+            + "?token=" + apiKey
+            + "&torrent_id=" + torrentId
+            + "&zip_link=" + (zippedLink ? "true" : "false")
+            + "&user_ip="
+            + "&redirect=false";
+
+        Request request = new Request.Builder()
+            .url(url)
+            .get()
+            .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                callback.onError(e);
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                try (Response res = response) {
+                    if (!res.isSuccessful()) {
+                        callback.onError(new IOException("HTTP " + res.code() + ": " + res.message()));
+                        return;
+                    }
+
+                    if (res.body() == null) {
+                        callback.onError(new IOException("Empty response"));
+                        return;
+                    }
+
+                    DownloadLinkResponse result = gson.fromJson(res.body().string(), DownloadLinkResponse.class);
+
+                    if (result == null) {
+                        callback.onError(new IOException("Invalid response"));
+                        return;
+                    }
+
+                    if (Boolean.FALSE.equals(result.success)) {
+                        String message = result.detail;
+
+                        if (message == null || message.isEmpty()) {
+                            message = result.error;
+                        }
+
+                        callback.onError(new IOException(message != null ? message : "TorBox request failed"));
+                        return;
+                    }
+
+                    callback.onSuccess(result);
+                } catch (Exception e) {
+                    callback.onError(e);
+                }
+            }
+        });
+    }
+
+    public void createTorrent(String apiKey, String magnet, String name, boolean allowZip, boolean asQueued, int seed, CreateTorrentCallback callback) {
+        MultipartBody.Builder form = new MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("magnet", magnet)
+            .addFormDataPart("allow_zip", String.valueOf(allowZip))
+            .addFormDataPart("as_queued", String.valueOf(asQueued))
+            .addFormDataPart("seed", String.valueOf(seed));
+
+        if (name != null && !name.trim().isEmpty()) {
+            form.addFormDataPart("name", name.trim());
+        }
+
+        Request request = new Request.Builder()
+            .url(BASE_URL + "/v1/api/torrents/createtorrent")
+            .post(form.build())
+            .header("Authorization", "Bearer " + apiKey)
+            .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                callback.onError(e);
+            }
+
+            @Override
+            public void onResponse(@NonNull Call call, @NonNull Response response) {
+                try (Response res = response) {
+                    if (res.body() == null) {
+                        callback.onError(new IOException("Empty response"));
+                        return;
+                    }
+
+                    String json = res.body().string();
+                    CreateTorrentResponse result = gson.fromJson(json, CreateTorrentResponse.class);
+
+                    if (result == null) {
+                        callback.onError(new IOException("Invalid response"));
+                        return;
+                    }
+
+                    if (!res.isSuccessful()) {
+                        String message = result.detail;
+
+                        if (message == null || message.isEmpty()) {
+                            message = result.error;
+                        }
+
+                        callback.onError(new IOException("HTTP " + res.code() + ": " + (message != null ? message : res.message())));
+                        return;
+                    }
+
+                    if (Boolean.FALSE.equals(result.success)) {
+                        String message = result.detail;
+
+                        if (message == null || message.isEmpty()) {
+                            message = result.error;
+                        }
+
+                        callback.onError(new IOException(message != null ? message : "TorBox request failed"
+                        ));
+                        return;
+                    }
+
+                    callback.onSuccess(result);
+                } catch (Exception e) {
+                    callback.onError(e);
+                }
+            }
+        });
+    }
+
     public interface MyListCallback {
         void onSuccess(MyListResponse response);
 
@@ -232,5 +300,17 @@ public class TorboxAPIClient {
         public String error;
         public String detail;
         public String data;
+    }
+
+    public interface CreateTorrentCallback {
+        void onSuccess(CreateTorrentResponse response);
+        void onError(Exception error);
+    }
+
+    public static class CreateTorrentResponse {
+        public Boolean success;
+        public String error;
+        public String detail;
+        public TorrentData data;
     }
 }
